@@ -1,5 +1,142 @@
-#include <stdlib.h>
+#define _GNU_SOURCE
 
-int main() {
-    return 0;
+#include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+
+#define FUSE_USE_VERSION 35
+#include <fuse.h>
+#include <fuse_lowlevel.h>
+
+#include <sqlite3.h>
+
+static struct tagfs {
+    char *datadir;
+    int datadirfd;
+    sqlite3 *db;
+} tagfs;
+
+static const struct fuse_operations tagfs_ops = {
+};
+
+enum {
+    KEY_VERSION,
+    KEY_HELP,
+};
+
+#define TAG_OPT(t, p, v) { t, offsetof(struct tagfs, p), v }
+static const struct fuse_opt tagfs_opts[] = {
+    FUSE_OPT_KEY("-V", KEY_VERSION),
+    FUSE_OPT_KEY("--version", KEY_VERSION),
+    FUSE_OPT_KEY("-h", KEY_HELP),
+    FUSE_OPT_KEY("--help", KEY_HELP),
+    FUSE_OPT_END
+};
+
+static void tag_usage(struct fuse_args *args) {
+    printf("usage: %s datadir mountpoint [options]\n"
+           "\n"
+           "    -h   --help      print help\n"
+           "    -V   --version   print version\n"
+           "    -o opt,[opt...]  mount options\n"
+           "\n"
+           "FUSE options:\n",
+           args->argv[0]);
+    fuse_lib_help(args);
+}
+
+static int tagfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs) {
+    (void)data;
+
+    switch (key) {
+    case FUSE_OPT_KEY_NONOPT:
+        if (!tagfs.datadir) {
+            tagfs.datadir = strdup(arg);
+            return 0;
+        }
+        return 1;
+
+    case KEY_VERSION:
+        printf("YATAGFS version 0.1.0\n"
+               "FUSE library version %s\n",
+               fuse_pkgversion());
+        fuse_lowlevel_version();
+        exit(0);
+
+    case KEY_HELP:
+        tag_usage(outargs);
+        exit(1);
+    }
+
+    return 1;
+}
+
+int main(int argc, char **argv) {
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    int rc = fuse_opt_parse(&args, NULL, tagfs_opts, tagfs_opt_proc);
+    if (rc < 0)
+        return 1;
+
+    if (!tagfs.datadir) {
+        tag_usage(&args);
+        return 1;
+    }
+
+    struct stat sb;
+    rc = stat(tagfs.datadir, &sb);
+    if (!rc) {
+        if ((sb.st_mode & S_IFMT) == S_IFDIR) {
+            rc = open(tagfs.datadir, O_DIRECTORY);
+            if (rc < 0) {
+                perror("open");
+                return 1;
+            }
+            tagfs.datadirfd = rc;
+        } else {
+            fprintf(stderr, "%s is not a directory\n", tagfs.datadir);
+            return 1;
+        }
+    } else {
+        if (errno == ENOENT) {
+            rc = mkdir(tagfs.datadir, 0755);
+            if (rc < 0) {
+                perror("mkdir");
+                return 1;
+            }
+            tagfs.datadirfd = rc;
+        } else {
+            perror("stat");
+            return 1;
+        }
+    }
+
+    char *path = realpath(tagfs.datadir, NULL);
+    if (!path) {
+        perror("realpath");
+        return 1;
+    }
+    size_t dirpathlen = strlen(path);
+    char filename[] = "/.yatagfs.db";
+    size_t filenamelen = sizeof filename;
+    path = realloc(path, dirpathlen + filenamelen);
+    assert(path != NULL);
+    memcpy(path + dirpathlen, filename, filenamelen);
+
+    rc = sqlite3_open(path, &tagfs.db);
+    free(path);
+    if (rc) {
+        fprintf(stderr, "Can't open SQLite database: %s\n", sqlite3_errmsg(tagfs.db));
+        sqlite3_close(tagfs.db);
+        return 1;
+    }
+
+    rc = fuse_main(args.argc, args.argv, &tagfs_ops, NULL);
+
+    sqlite3_close(tagfs.db);
+    fuse_opt_free_args(&args);
+
+    return rc;
 }
