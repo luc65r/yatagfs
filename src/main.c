@@ -11,7 +11,10 @@
 #include <fuse.h>
 #include <fuse_lowlevel.h>
 
+#define SQLITE_DEBUG
 #include <sqlite3.h>
+
+#include "sql_queries.h"
 
 static struct tagfs {
     char *datadir;
@@ -127,14 +130,24 @@ int main(int argc, char **argv) {
 
     rc = sqlite3_open(path, &tagfs.db);
     free(path);
-    if (rc) {
+    if (rc != SQLITE_OK) {
         fprintf(stderr, "Can't open SQLite database: %s\n", sqlite3_errmsg(tagfs.db));
-        sqlite3_close(tagfs.db);
-        return 1;
+        rc = 1;
+        goto err;
+    }
+
+    char *errormsg;
+    rc = sqlite3_exec(tagfs.db, tagfs_sql_create_tables, NULL, NULL, &errormsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Can't create tables: %s\n", errormsg);
+        sqlite3_free(errormsg);
+        rc = 1;
+        goto err;
     }
 
     rc = fuse_main(args.argc, args.argv, &tagfs_ops, NULL);
 
+err:
     sqlite3_close(tagfs.db);
     fuse_opt_free_args(&args);
 

@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS files
+    ( id INTEGER PRIMARY KEY NOT NULL
+    , path TEXT NOT NULL UNIQUE
+    );
+
+CREATE TABLE IF NOT EXISTS tags
+    ( id INTEGER PRIMARY KEY NOT NULL
+    , name TEXT NOT NULL UNIQUE
+    );
+
+CREATE TABLE IF NOT EXISTS files_tags
+    ( file_id INTEGER NOT NULL
+    , tag_id INTEGER NOT NULL
+    , PRIMARY KEY (file_id, tag_id)
+    , FOREIGN KEY (file_id) REFERENCES files (id) ON DELETE CASCADE
+    , FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
+    );
