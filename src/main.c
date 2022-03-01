@@ -327,9 +327,118 @@ end:
     return res;
 }
 
+static int tagfs_readdir(const char *_path, void *buf, fuse_fill_dir_t filler,
+                         off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
+    (void)offset;
+    (void)fi;
+    (void)flags;
+
+    int res, rc;
+    struct stat st = {0};
+
+    char *path = strdup(_path);
+    assert(path != NULL);
+
+    char **parts = tagfs_separate_path(path);
+    assert(parts != NULL);
+
+    size_t nparts = 0;
+    for (char **p = parts; *p != NULL; p++)
+        nparts++;
+
+    for (size_t i = 0; i < nparts; i++) {
+        int64_t tid = tagfs_get_tag(parts[i]);
+        if (tid < 0) {
+            res = -EIO;
+            goto end;
+        }
+        if (!tid) {
+            res = -ENOENT;
+            goto end;
+        }
+    }
+
+    sqlite3_stmt *stmt;
+    rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_get_tags, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+    assert(stmt != NULL);
+
+    st.st_mode = S_IFDIR | 0755;
+    st.st_nlink = 2;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        const char *dir = (const char *)sqlite3_column_text(stmt, 1);
+        assert(dir != NULL);
+        filler(buf, dir, &st, 0, 0);
+    }
+
+    if (rc != SQLITE_DONE) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_step: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+
+    rc = sqlite3_finalize(stmt);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_finalize: %s\n", sqlite3_errmsg(tagfs.db));
+        /* I guess we can continue */
+    }
+    stmt = NULL;
+
+    rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_get_files_in_tags, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+    assert(stmt != NULL);
+
+    rc = sqlite3_carray_bind(stmt, 1, parts, nparts, CARRAY_TEXT, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_carray_bind: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+
+    rc = sqlite3_bind_int64(stmt, 2, (int64_t)nparts);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_bind_int64: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+
+    st.st_mode = 0644;
+    st.st_nlink = 1;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        const char *file = (const char *)sqlite3_column_text(stmt, 1);
+        assert(file != NULL);
+        filler(buf, file, &st, 0, 0);        
+    }
+
+    if (rc != SQLITE_DONE) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_step: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+    res = 0;
+
+end:
+    rc = sqlite3_finalize(stmt);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_finalize: %s\n", sqlite3_errmsg(tagfs.db));
+        /* it should be fine to still return `res` */
+    }
+    free(path);
+    return res;
+}
+
 static const struct fuse_operations tagfs_ops = {
     .getattr = tagfs_getattr,
     .mkdir = tagfs_mkdir,
+    .readdir = tagfs_readdir,
 };
 
 enum {
@@ -445,6 +554,15 @@ int main(int argc, char **argv) {
     }
 
     char *errormsg;
+    SQLITE_API int sqlite3_carray_init(sqlite3 *db, char **pzErrMsg, const sqlite3_api_routines *pApi);
+    rc = sqlite3_carray_init(tagfs.db, &errormsg, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Can't load SQLite carray extension: %s\n", errormsg);
+        sqlite3_free(errormsg);
+        rc = 1;
+        goto err;
+    }
+
     rc = sqlite3_exec(tagfs.db, tagfs_sql_create_tables, NULL, NULL, &errormsg);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Can't create tables: %s\n", errormsg);
