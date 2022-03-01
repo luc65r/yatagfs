@@ -226,8 +226,110 @@ end:
     return res;
 }
 
+static int tagfs_create_tag(char *name) {
+    int res, rc;
+    sqlite3_stmt *stmt;
+    rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_insert_tag, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
+        return -1;
+    }
+    assert(stmt != NULL);
+
+    rc = sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_bind_text: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -1;
+        goto end;
+    }
+
+    rc = sqlite3_step(stmt);
+    switch (rc) {
+    case SQLITE_DONE:
+        res = 1;
+        break;
+    case SQLITE_CONSTRAINT:
+        res = 0;
+        break;
+    default:
+        fuse_log(FUSE_LOG_ERR, "sqlite3_step: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -1;
+        goto end;
+    }
+
+end:
+    rc = sqlite3_finalize(stmt);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_finalize: %s\n", sqlite3_errmsg(tagfs.db));
+        /* it should be fine to still return `res` */
+    }
+
+    return res;
+}
+
+static int tagfs_mkdir(const char *_path, mode_t mode) {
+    (void)mode;
+    int res, rc;
+
+    char *path = strdup(_path);
+    assert(path != NULL);
+
+    char **parts = tagfs_separate_path(path);
+    assert(parts != NULL);
+
+    size_t nparts = 0;
+    for (char **p = parts; *p != NULL; p++)
+        nparts++;
+
+    if (nparts == 0) {
+        assert(strcmp(_path, "/") == 0);
+        res = -EEXIST;
+        goto end;
+    }
+
+    for (size_t i = 0; i < nparts - 1; i++) {
+        int64_t tid = tagfs_get_tag(parts[i]);
+        if (tid < 0) {
+            res = -EIO;
+            goto end;
+        }
+        if (!tid) {
+            res = -ENOENT;
+            goto end;
+        }
+    }
+
+    int64_t fid = tagfs_get_file(parts[nparts - 1]);
+    if (fid < 0) {
+        res = -EIO;
+        goto end;
+    }
+    if (fid) {
+        res = -EEXIST;
+        goto end;
+    }
+
+    rc = tagfs_create_tag(parts[nparts - 1]);
+    switch (rc) {
+    case 1:
+        res = 0;
+        break;
+    case 0:
+        res = -EEXIST;
+        goto end;
+    default:
+        res = -EIO;
+        goto end;
+    }
+
+end:
+    free(path);
+    return res;
+}
+
 static const struct fuse_operations tagfs_ops = {
     .getattr = tagfs_getattr,
+    .mkdir = tagfs_mkdir,
 };
 
 enum {

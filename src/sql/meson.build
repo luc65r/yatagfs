@@ -7,6 +7,7 @@ srcs += custom_target(
     'get_tag.sql',
     'get_files_in_tags.sql',
     'has_file_tags.sql',
+    'insert_tag.sql',
   ),
   output : ['sql_queries.c', 'sql_queries.h'],
 )
