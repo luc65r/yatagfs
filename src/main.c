@@ -359,13 +359,20 @@ static int tagfs_readdir(const char *_path, void *buf, fuse_fill_dir_t filler,
     }
 
     sqlite3_stmt *stmt;
-    rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_get_tags, -1, &stmt, NULL);
+    rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_get_tags_not_in, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         fuse_log(FUSE_LOG_ERR, "sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
         res = -EIO;
         goto end;
     }
     assert(stmt != NULL);
+
+    rc = sqlite3_carray_bind(stmt, 1, parts, nparts, CARRAY_TEXT, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fuse_log(FUSE_LOG_ERR, "sqlite3_carray_bind: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
 
     st.st_mode = S_IFDIR | 0755;
     st.st_nlink = 2;
