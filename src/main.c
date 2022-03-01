@@ -205,7 +205,7 @@ static int tagfs_getattr(const char *_path, struct stat *stat, struct fuse_file_
         }
     } else {
         for (size_t i = 0; i < nparts; i++) {
-            int64_t tid = tagfs_get_tag(parts[nparts - 1]);
+            int64_t tid = tagfs_get_tag(parts[i]);
             if (tid < 0) {
                 res = -EIO;
                 goto end;
