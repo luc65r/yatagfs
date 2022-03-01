@@ -158,14 +158,14 @@ static int64_t tagfs_get_file(const char *name) {
     return tagfs_get_id(tagfs_sql_get_file, name);
 }
 
-static int tagfs_getattr(const char *_path, struct stat *stat, struct fuse_file_info *fi) {
+static int tagfs_getattr(const char *_path, struct stat *stbuf, struct fuse_file_info *fi) {
     int res;
     (void)fi;
     char *path = strdup(_path);
-    memset(stat, 0, sizeof *stat);
+    memset(stbuf, 0, sizeof *stbuf);
 
-    stat->st_uid = getuid();
-    stat->st_gid = getgid();
+    stbuf->st_uid = getuid();
+    stbuf->st_gid = getgid();
 
     char **parts = tagfs_separate_path(path);
     assert(parts != NULL);
@@ -176,8 +176,8 @@ static int tagfs_getattr(const char *_path, struct stat *stat, struct fuse_file_
 
     if (nparts == 0) {
         assert(strcmp(_path, "/") == 0);
-        stat->st_mode = S_IFDIR | 0755;
-        stat->st_nlink = 2;
+        stbuf->st_mode = S_IFDIR | 0755;
+        stbuf->st_nlink = 2;
         res = 0;
         goto end;
     }
@@ -194,7 +194,7 @@ static int tagfs_getattr(const char *_path, struct stat *stat, struct fuse_file_
             goto end;
         }
         if (rc) {
-            rc = fstatat(tagfs.datadirfd, parts[nparts - 1], stat, 0);
+            rc = fstatat(tagfs.datadirfd, parts[nparts - 1], stbuf, 0);
             if (rc < 0) {
                 res = -errno;
                 goto end;
@@ -216,8 +216,8 @@ static int tagfs_getattr(const char *_path, struct stat *stat, struct fuse_file_
             }
         }
 
-        stat->st_mode = S_IFDIR | 0755;
-        stat->st_nlink = 2;
+        stbuf->st_mode = S_IFDIR | 0755;
+        stbuf->st_nlink = 2;
         res = 0;
     }
 
@@ -395,10 +395,10 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    struct stat sb;
-    rc = stat(tagfs.datadir, &sb);
+    struct stat stbuf;
+    rc = stat(tagfs.datadir, &stbuf);
     if (!rc) {
-        if ((sb.st_mode & S_IFMT) == S_IFDIR) {
+        if ((stbuf.st_mode & S_IFMT) == S_IFDIR) {
             rc = open(tagfs.datadir, O_DIRECTORY);
             if (rc < 0) {
                 perror("open");
