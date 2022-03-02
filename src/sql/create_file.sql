@@ -1,0 +1,3 @@
+INSERT OR REPLACE
+INTO files (path)
+VALUES (?)
