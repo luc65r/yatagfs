@@ -442,9 +442,54 @@ end:
     return res;
 }
 
+static int tagfs_open(const char *_path, struct fuse_file_info *fi) {
+    int res, rc;
+    char *path = strdup(_path);
+    assert(path != NULL);
+
+    char **parts = tagfs_separate_path(path);
+    assert(parts != NULL);
+
+    size_t nparts = 0;
+    for (char **p = parts; *p != NULL; p++)
+        nparts++;
+
+    if (nparts == 0) {
+        assert(strcmp(_path, "/") == 0);
+        res = -EISDIR;
+        goto end;
+    }
+
+    rc = tagfs_has_file_tags(parts[nparts - 1], parts, nparts - 1);
+    if (rc < 0) {
+        res = -EIO;
+        goto end;
+    }
+    if (!rc) {
+        res = -ENOENT;
+        goto end;
+    }
+
+    rc = openat(tagfs.datadirfd, parts[nparts - 1], 0);
+    if (rc < 0) {
+        fuse_log(FUSE_LOG_ERR, "openat: %s\n", strerror(errno));
+        res = -EIO;
+        goto end;
+    }
+
+    fi->fh = rc;
+    fi->direct_io = 1;
+    res = 0;
+
+end:
+    free(path);
+    return res;
+}
+
 static const struct fuse_operations tagfs_ops = {
     .getattr = tagfs_getattr,
     .mkdir = tagfs_mkdir,
+    .open = tagfs_open,
     .readdir = tagfs_readdir,
 };
 
