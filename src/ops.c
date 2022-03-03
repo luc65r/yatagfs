@@ -401,10 +401,21 @@ static int tagfs_flush(const char *path, struct fuse_file_info *fi) {
     return 0;
 }
 
+static int tagfs_fsync(const char *path, int datasync, struct fuse_file_info *fi) {
+    (void)path;
+
+    if (datasync ? fdatasync(fi->fh) : fsync(fi->fh)) {
+        log_err("f(data)sync: %s\n", strerror(errno));
+        return -errno;
+    }
+
+    return 0;
+}
+
 const struct fuse_operations tagfs_ops = {
     .create = tagfs_create,
     .flush = tagfs_flush,
-    //    .fsync = tagfs_fsync,
+    .fsync = tagfs_fsync,
     .getattr = tagfs_getattr,
     .mkdir = tagfs_mkdir,
     .open = tagfs_open,
