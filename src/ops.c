@@ -423,6 +423,19 @@ static int tagfs_release(const char *path, struct fuse_file_info *fi) {
     return 0;
 }
 
+static int tagfs_read(const char *path, char *buf, size_t size,
+                      off_t offset, struct fuse_file_info *fi) {
+    (void)path;
+
+    ssize_t r = pread(fi->fh, buf, size, offset);
+    if (r < 0) {
+        log_err("pread: %s\n", strerror(errno));
+        return -errno;
+    }
+
+    return r;
+}
+
 const struct fuse_operations tagfs_ops = {
     .create = tagfs_create,
     .flush = tagfs_flush,
@@ -430,7 +443,7 @@ const struct fuse_operations tagfs_ops = {
     .getattr = tagfs_getattr,
     .mkdir = tagfs_mkdir,
     .open = tagfs_open,
-    //    .read = tagfs_read,
+    .read = tagfs_read,
     .readdir = tagfs_readdir,
     .release = tagfs_release,
 };
