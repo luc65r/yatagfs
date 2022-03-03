@@ -15,6 +15,7 @@
 #include <sqlite3.h>
 #include "carray.h"
 
+#include "log.h"
 #include "ops.h"
 #include "sql_queries.h"
 #include "tagfs.h"
@@ -72,6 +73,8 @@ static int tagfs_opt_proc(void *data, const char *arg, int key, struct fuse_args
 }
 
 int main(int argc, char **argv) {
+    fuse_set_log_func(log_fuse);
+
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     int rc = fuse_opt_parse(&args, NULL, tagfs_opts, tagfs_opt_proc);
     if (rc < 0)
@@ -87,26 +90,20 @@ int main(int argc, char **argv) {
     if (!rc) {
         if ((stbuf.st_mode & S_IFMT) == S_IFDIR) {
             rc = open(tagfs.datadir, O_DIRECTORY);
-            if (rc < 0) {
-                perror("open");
-                return 1;
-            }
+            if (rc < 0)
+                log_fatal("open: %s\n", strerror(errno));
             tagfs.datadirfd = rc;
         } else {
-            fprintf(stderr, "%s is not a directory\n", tagfs.datadir);
-            return 1;
+            log_fatal("%s is not a directory\n", tagfs.datadir);
         }
     } else {
         if (errno == ENOENT) {
             rc = mkdir(tagfs.datadir, 0755);
-            if (rc < 0) {
-                perror("mkdir");
-                return 1;
-            }
+            if (rc < 0)
+                log_fatal("mkdir: %s\n", strerror(errno));
             tagfs.datadirfd = rc;
         } else {
-            perror("stat");
-            return 1;
+            log_fatal("stat: %s\n", strerror(errno));
         }
     }
 
@@ -125,7 +122,7 @@ int main(int argc, char **argv) {
     rc = sqlite3_open(path, &tagfs.db);
     free(path);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "Can't open SQLite database: %s\n",
+        log_err("cannot open SQLite database: %s\n",
                 tagfs.db ? sqlite3_errmsg(tagfs.db) : sqlite3_errstr(rc));
         rc = 1;
         goto err;
@@ -134,7 +131,7 @@ int main(int argc, char **argv) {
     char *errormsg;
     rc = sqlite3_carray_init(tagfs.db, &errormsg, NULL);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "Can't load SQLite carray extension: %s\n", errormsg);
+        log_err("cannot load SQLite carray extension: %s\n", errormsg);
         sqlite3_free(errormsg);
         rc = 1;
         goto err;
@@ -142,7 +139,7 @@ int main(int argc, char **argv) {
 
     rc = sqlite3_exec(tagfs.db, tagfs_sql_set_recursive_triggers, NULL, NULL, &errormsg);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "Can't set recursive_triggers pragma: %s\n", errormsg);
+        log_err("cannot set recursive_triggers pragma: %s\n", errormsg);
         sqlite3_free(errormsg);
         rc = 1;
         goto err;
@@ -150,7 +147,7 @@ int main(int argc, char **argv) {
 
     rc = sqlite3_exec(tagfs.db, tagfs_sql_create_tables, NULL, NULL, &errormsg);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "Can't create tables: %s\n", errormsg);
+        log_err("cannot create tables: %s\n", errormsg);
         sqlite3_free(errormsg);
         rc = 1;
         goto err;
