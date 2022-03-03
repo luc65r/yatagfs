@@ -31,8 +31,11 @@ static void vlog(enum fuse_log_level level, const char *restrict file,
     static_assert(sizeof strings / sizeof *strings == 8);
     static_assert(sizeof colors / sizeof *colors == 8);
 
-    fprintf(stderr, "\033[%sm%-7s\033[m \033[90m%s:%d\033[m ",
-            colors[level], strings[level], file, line);
+    if (file != NULL && line >= 0)
+        fprintf(stderr, "\033[%sm%-7s\033[m \033[90m%s:%d\033[m ",
+                colors[level], strings[level], file, line);
+    else
+        fprintf(stderr, "\033[%sm%-7s\033[m ", colors[level], strings[level]);
     vfprintf(stderr, fmt, ap);
 }
 
