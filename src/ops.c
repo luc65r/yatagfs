@@ -412,6 +412,17 @@ static int tagfs_fsync(const char *path, int datasync, struct fuse_file_info *fi
     return 0;
 }
 
+static int tagfs_release(const char *path, struct fuse_file_info *fi) {
+    (void)path;
+
+    if (close(fi->fh) < 0) {
+        log_err("close: %s\n", strerror(errno));
+        return -errno;
+    }
+
+    return 0;
+}
+
 const struct fuse_operations tagfs_ops = {
     .create = tagfs_create,
     .flush = tagfs_flush,
@@ -421,5 +432,5 @@ const struct fuse_operations tagfs_ops = {
     .open = tagfs_open,
     //    .read = tagfs_read,
     .readdir = tagfs_readdir,
-    //    .release = tagfs_release,
+    .release = tagfs_release,
 };
