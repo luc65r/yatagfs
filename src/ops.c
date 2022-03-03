@@ -436,6 +436,19 @@ static int tagfs_read(const char *path, char *buf, size_t size,
     return r;
 }
 
+static int tagfs_write(const char *path, const char *buf, size_t size,
+                       off_t offset, struct fuse_file_info *fi) {
+    (void)path;
+
+    ssize_t w = pwrite(fi->fh, buf, size, offset);
+    if (w < 0) {
+        log_err("pwrite: %s\n", strerror(errno));
+        return -errno;
+    }
+
+    return w;
+}
+
 const struct fuse_operations tagfs_ops = {
     .create = tagfs_create,
     .flush = tagfs_flush,
@@ -446,4 +459,5 @@ const struct fuse_operations tagfs_ops = {
     .read = tagfs_read,
     .readdir = tagfs_readdir,
     .release = tagfs_release,
+    .write = tagfs_write,
 };
