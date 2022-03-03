@@ -358,7 +358,7 @@ static int tagfs_create(const char *_path, mode_t mode, struct fuse_file_info *f
         goto end;
     }
 
-    rc = openat(tagfs.datadirfd, filename, mode);
+    rc = openat(tagfs.datadirfd, filename, O_CREAT | O_TRUNC, mode);
     if (rc < 0) {
         log_err("openat: %s\n", strerror(errno));
         res = -EIO;
