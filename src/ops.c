@@ -297,7 +297,7 @@ static int tagfs_open(const char *_path, struct fuse_file_info *fi) {
         goto end;
     }
 
-    rc = openat(tagfs.datadirfd, parts[nparts - 1], 0);
+    rc = openat(tagfs.datadirfd, parts[nparts - 1], O_RDWR);
     if (rc < 0) {
         log_err("openat: %s\n", strerror(errno));
         res = -EIO;
@@ -368,7 +368,7 @@ static int tagfs_create(const char *_path, mode_t mode, struct fuse_file_info *f
         goto end;
     }
 
-    rc = openat(tagfs.datadirfd, filename, O_CREAT | O_TRUNC, mode);
+    rc = openat(tagfs.datadirfd, filename, O_RDWR | O_CREAT | O_TRUNC, mode);
     if (rc < 0) {
         log_err("openat: %s\n", strerror(errno));
         res = -EIO;
