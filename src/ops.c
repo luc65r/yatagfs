@@ -212,27 +212,37 @@ static int tagfs_readdir(const char *_path, void *buf, fuse_fill_dir_t filler,
     }
     stmt = NULL;
 
-    rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_get_files_in_tags, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        log_err("sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
-        res = -EIO;
-        goto end;
-    }
-    assert(stmt != NULL);
+    if (nparts > 0) {
+        rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_get_files_in_tags, -1, &stmt, NULL);
+        if (rc != SQLITE_OK) {
+            log_err("sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
+            res = -EIO;
+            goto end;
+        }
+        assert(stmt != NULL);
 
-    rc = sqlite3_carray_bind(stmt, 1, parts, nparts, CARRAY_TEXT, SQLITE_STATIC);
-    if (rc != SQLITE_OK) {
-        log_err("sqlite3_carray_bind: %s\n", sqlite3_errmsg(tagfs.db));
-        res = -EIO;
-        goto end;
-    }
+        rc = sqlite3_carray_bind(stmt, 1, parts, nparts, CARRAY_TEXT, SQLITE_STATIC);
+        if (rc != SQLITE_OK) {
+            log_err("sqlite3_carray_bind: %s\n", sqlite3_errmsg(tagfs.db));
+            res = -EIO;
+            goto end;
+        }
 
-    rc = sqlite3_bind_int64(stmt, 2, (int64_t)nparts);
-    if (rc != SQLITE_OK) {
-        log_err("sqlite3_bind_int64: %s\n", sqlite3_errmsg(tagfs.db));
-        res = -EIO;
-        goto end;
-    }
+        rc = sqlite3_bind_int64(stmt, 2, (int64_t)nparts);
+        if (rc != SQLITE_OK) {
+            log_err("sqlite3_bind_int64: %s\n", sqlite3_errmsg(tagfs.db));
+            res = -EIO;
+            goto end;
+        }
+    } else {
+        rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_get_files, -1, &stmt, NULL);
+        if (rc != SQLITE_OK) {
+            log_err("sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
+            res = -EIO;
+            goto end;
+        }
+        assert(stmt != NULL);
+    }        
 
     st.st_mode = 0644;
     st.st_nlink = 1;
