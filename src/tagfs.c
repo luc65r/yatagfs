@@ -127,16 +127,16 @@ int tagfs_add_tags_to_file(const char *path, char **tags, size_t ntags) {
     }
     assert(stmt != NULL);
 
-    rc = sqlite3_carray_bind(stmt, 1, tags, ntags, CARRAY_TEXT, SQLITE_STATIC);
+    rc = sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     if (rc != SQLITE_OK) {
-        log_err("sqlite3_carray_bind: %s\n", sqlite3_errmsg(tagfs.db));
+        log_err("sqlite3_bind_text: %s\n", sqlite3_errmsg(tagfs.db));
         res = -1;
         goto end;
     }
 
-    rc = sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+    rc = sqlite3_carray_bind(stmt, 2, tags, ntags, CARRAY_TEXT, SQLITE_STATIC);
     if (rc != SQLITE_OK) {
-        log_err("sqlite3_bind_text: %s\n", sqlite3_errmsg(tagfs.db));
+        log_err("sqlite3_carray_bind: %s\n", sqlite3_errmsg(tagfs.db));
         res = -1;
         goto end;
     }
