@@ -384,9 +384,26 @@ end:
     return res;    
 }
 
+static int tagfs_flush(const char *path, struct fuse_file_info *fi) {
+    (void)path;
+
+    int fd = dup(fi->fh);
+    if (fd < 0) {
+        log_err("dup: %s\n", strerror(errno));
+        return -errno;
+    }
+
+    if (close(fd) < 0) {
+        log_err("close: %s\n", strerror(errno));
+        return -errno;
+    }
+
+    return 0;
+}
+
 const struct fuse_operations tagfs_ops = {
     .create = tagfs_create,
-    //    .flush = tagfs_flush,
+    .flush = tagfs_flush,
     //    .fsync = tagfs_fsync,
     .getattr = tagfs_getattr,
     .mkdir = tagfs_mkdir,
