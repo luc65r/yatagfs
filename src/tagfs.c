@@ -16,6 +16,11 @@ struct tagfs tagfs;
 int tagfs_has_file_tags(char *path, char **tags, size_t ntags) {
     int res, rc;
     sqlite3_stmt *stmt;
+
+    if (ntags == 0) {
+        return (int)tagfs_get_file(path);
+    }
+
     rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_has_file_tags, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         log_err("sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
