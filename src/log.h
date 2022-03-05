@@ -17,3 +17,5 @@ void log_log(enum fuse_log_level level, const char *restrict file, int line, con
     __attribute__((format(printf, 4, 5)));
 
 void log_fuse(enum fuse_log_level level, const char *fmt, va_list ap);
+
+void log_sqlite(void *data, int code, const char *msg);

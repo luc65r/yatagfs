@@ -119,6 +119,13 @@ int main(int argc, char **argv) {
     assert(path != NULL);
     memcpy(path + dirpathlen, filename, filenamelen);
 
+    rc = sqlite3_config(SQLITE_CONFIG_LOG, log_sqlite, NULL);
+    if (rc != SQLITE_OK) {
+        log_err("cannot set SQLite error callback: %s\n", sqlite3_errstr(rc));
+        rc = 1;
+        goto err;
+    }
+
     rc = sqlite3_open(path, &tagfs.db);
     free(path);
     if (rc != SQLITE_OK) {

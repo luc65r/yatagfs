@@ -2,6 +2,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include <sqlite3.h>
+
 #include "log.h"
 
 static const char *strings[] = {
@@ -49,4 +51,18 @@ void log_log(enum fuse_log_level level, const char *restrict file,
 
 void log_fuse(enum fuse_log_level level, const char *fmt, va_list ap) {
     vlog(level, NULL, -1, fmt, ap);
+}
+
+void log_sqlite(void *data, int code, const char *msg) {
+    (void)data;
+    enum fuse_log_level level;
+    switch (code) {
+#define L(S, F) case S: level = F; break
+        L(SQLITE_WARNING, FUSE_LOG_WARNING);
+        L(SQLITE_NOTICE, FUSE_LOG_NOTICE);
+#undef L
+    default:
+        level = FUSE_LOG_ERR;
+    }
+    log_log(level, NULL, -1, "SQLite: (%d) %s\n", code, msg);
 }
