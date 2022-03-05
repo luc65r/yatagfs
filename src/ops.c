@@ -449,6 +449,98 @@ static int tagfs_write(const char *path, const char *buf, size_t size,
     return w;
 }
 
+static int tagfs_rmdir(const char *_path) {
+    int res, rc;
+
+    char *path = strdup(_path);
+    assert(path != NULL);
+
+    char **parts = tagfs_separate_path(path);
+    assert(parts != NULL);
+
+    size_t nparts = 0;
+    for (nparts = 0; parts[nparts] != NULL; nparts++) {
+        int64_t tid = tagfs_get_tag(parts[nparts]);
+        if (tid < 0) {
+            res = -EIO;
+            goto end;
+        }
+        if (!tid) {
+            res = -ENOENT;
+            goto end;
+        }        
+    }
+
+    char *tag = parts[nparts - 1];
+
+    sqlite3_stmt *stmt;
+    rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_get_files_in_tag, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        log_err("sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+    assert(stmt != NULL);
+
+    rc = sqlite3_bind_text(stmt, 1, tag, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        log_err("sqlite3_bind_int64: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+
+    rc = sqlite3_step(stmt);
+    switch (rc) {
+    case SQLITE_DONE:
+        break;
+    case SQLITE_ROW:
+        res = -ENOTEMPTY;
+        goto end;
+    default:
+        log_err("sqlite3_step: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+
+    rc = sqlite3_finalize(stmt);
+    if (rc != SQLITE_OK) {
+        log_err("sqlite3_finalize: %s\n", sqlite3_errmsg(tagfs.db));
+    }
+
+    rc = sqlite3_prepare_v2(tagfs.db, tagfs_sql_delete_tag, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        log_err("sqlite3_prepare_v2: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+    assert(stmt != NULL);
+
+    rc = sqlite3_bind_text(stmt, 1, tag, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        log_err("sqlite3_bind_int64: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        log_err("sqlite3_step: %s\n", sqlite3_errmsg(tagfs.db));
+        res = -EIO;
+        goto end;
+    }
+
+    res = 0;
+
+end:
+    rc = sqlite3_finalize(stmt);
+    if (rc != SQLITE_OK) {
+        log_err("sqlite3_finalize: %s\n", sqlite3_errmsg(tagfs.db));
+        /* it should be fine to still return `res` */
+    }
+    free(path);
+    return res;
+}
+
 const struct fuse_operations tagfs_ops = {
     .create = tagfs_create,
     .flush = tagfs_flush,
@@ -459,5 +551,6 @@ const struct fuse_operations tagfs_ops = {
     .read = tagfs_read,
     .readdir = tagfs_readdir,
     .release = tagfs_release,
+    .rmdir = tagfs_rmdir,
     .write = tagfs_write,
 };
